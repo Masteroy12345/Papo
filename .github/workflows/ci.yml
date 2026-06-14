@@ -2,10 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - '**'
   pull_request:
-    branches: [ main, develop ]
+    branches:
+      - '**'
   workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
@@ -92,7 +98,7 @@ jobs:
 
 
   build_apk:
-    name: Build Android APK
+    name: Build Android Release Artifacts
     runs-on: ubuntu-latest
 
     steps:
@@ -117,8 +123,21 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Upload APK artifact
+      - name: Build release App Bundle
+        run: flutter build appbundle --release
+
+      - name: Compute artifact suffix
+        shell: bash
+        run: |
+          REF_NAME="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          REF_SLUG="${REF_NAME//\//-}"
+          echo "ARTIFACT_SUFFIX=${GITHUB_REPOSITORY#*/}-${REF_SLUG}-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: papo-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: papo-release-${{ env.ARTIFACT_SUFFIX }}
+          if-no-files-found: error
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
